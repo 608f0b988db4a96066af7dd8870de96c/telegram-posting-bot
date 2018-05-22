@@ -1,51 +1,58 @@
 #!/usr/bin/env python3
 
 import time
-from os.path import isfile
-
 import requests
 import telebot
 
-SOURCE = 'https://gelbooru.com/index.php?page=dapi&s=post&q=index&tags=loli+-animated&json=1'
+SOURCE = '' #your gelbooru/yandere/etc source in json format
 BOT_TOKEN = '' #your token
 CHAT_ID = '' #your chat_id
 LAST_POSTED = 'src'
 
-def json_parse(source, image_number):
-    data = []
-    response = requests.get(source)
-    image_source = response.json()[image_number]['file_url']
-    original_source = response.json()[image_number]['source']
-    data.append(image_source)
-    data.append(original_source)
-    return data
+def download_file(url):
+    r = requests.get(url, stream=True)
+    with open('temp', 'wb') as f:
+        for chunk in r.iter_content(chunk_size=1024): 
+            if chunk:
+                f.write(chunk)
 
 def post_image(image_source, original_source):
-    bot.send_photo(CHAT_ID, image_source, original_source)
+    if int(requests.get(image_source).headers['content-length']) < 5242880:
+        bot.send_photo(CHAT_ID, image_source, original_source)
+    else:
+        download_file(image_source)
+        with open('temp', 'rb') as f:
+            bot.send_photo(CHAT_ID, f.read(), original_source) 
     time.sleep(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-if not isfile(LAST_POSTED):
-    post_image(json_parse(SOURCE, 0)[0], json_parse(SOURCE, 0)[1])
-    with open(LAST_POSTED, 'w') as f:
-        f.write(json_parse(SOURCE, 0)[0])
-
 while True:
-    last_image_source = json_parse(SOURCE, 0)[0]
-    with open(LAST_POSTED, 'r') as f:
-        last_posted_image = f.read()
+    data = requests.get(SOURCE).json()
+    last_image_source = data[0]['file_url']
+    
+    try:
+        with open(LAST_POSTED, 'r') as f:
+            last_posted_image = f.read()
+    except FileNotFoundError:
+        post_image(data[0]['file_url'], data[0]['source'])
+        with open(LAST_POSTED, 'w') as f:
+            f.write(data[0]['file_url'])
 
     if last_image_source != last_posted_image:
-        current_number = 1
+        try:
+            for i in range(0, 100):
+                if data[i]['file_url'] == last_posted_image:
+                    current_number = i
 
-        for i in range(0, 99):
-            if last_posted_image == json_parse(SOURCE, i)[0]:
-                current_number = i
-                break
+            for i in range(current_number - 1, -1, -1):
+                post_image(data[i]['file_url'], data[i]['source'])
+        except NameError:
+            current_number = 1
 
-        for i in range(current_number - 1, -1, -1):
-            post_image(json_parse(SOURCE, i)[0], json_parse(SOURCE, i)[1])
+            for i in range(current_number - 1, -1, -1):
+                post_image(data[i]['file_url'], data[i]['source'])
+
         with open(LAST_POSTED, 'w') as f:
             f.write(last_image_source)
     else:
