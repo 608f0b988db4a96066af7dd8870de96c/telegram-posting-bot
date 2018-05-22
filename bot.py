@@ -30,7 +30,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 while True:
     data = requests.get(SOURCE).json()
     last_image_source = data[0]['file_url']
-    
+
     try:
         with open(LAST_POSTED, 'r') as f:
             last_posted_image = f.read()
@@ -38,6 +38,9 @@ while True:
         post_image(data[0]['file_url'], data[0]['source'])
         with open(LAST_POSTED, 'w') as f:
             f.write(data[0]['file_url'])
+        
+        with open(LAST_POSTED, 'r') as f:
+            last_posted_image = f.read()
 
     if last_image_source != last_posted_image:
         try:
